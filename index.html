@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vue 3 CRUD Example using IndexedDB</title>
+  
+  <script src="https://unpkg.com/vue/dist/vue.global.js"></script>
+  <script src="https://unpkg.com/idb/build/umd.js "></script>
+  
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+
+    button {
+      margin: 5px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <h1>Vue 3 CRUD example using IndexedDB</h1>
+    
+    <h3>List of Unique Names:</h1>
+
+    <form @submit.prevent="createItem">
+      <input v-model="newItem" type="text" placeholder="Item Name" required />
+      <button type="submit">Add Item</button>
+    </form>
+    <ul>
+      <li v-for="item in items" :key="item.id">
+        {{ item.name }}
+        <button @click="updateItem(item)">Update</button>
+        <button @click="deleteItem(item.id)">Delete</button>
+      </li>
+    </ul>
+     <button @click="reset()">Reset</button>
+  </div>
+
+  <script>
+    const { createApp, ref, onMounted } = Vue;
+    const { openDB } = idb;
+    
+    let conn;
+
+    async function getDB() {
+      if (!conn) conn =  openDB("crud-db", 1, {
+        upgrade(db) {
+          if (!db.objectStoreNames.contains("items")) {
+            db.createObjectStore("items", { keyPath: "id", autoIncrement: true });
+          }
+        }
+      });
+      return conn;
+    };
+
+
+    // TODO: => fetch(/api/foo)
+    
+    async function addItem(item) {
+      const db = await getDB();
+      const rows = await getItems();
+      item.name = (item.name ?? "").trim();
+      if(rows.some(row => row.name === item.name)) return;
+      db.add("items", item);
+      console.log(`Added #${rows.length + 1} (${item.name})`);
+    };
+
+    async function getItems() {
+      const db = await getDB();
+      return db.getAll("items");
+    };
+
+    async function putItem(item) {
+      const db = await getDB();
+      return db.put("items", item);
+    };
+
+    async function removeItem(id) {
+      const db = await getDB();
+      return db.delete("items", id);
+    };
+
+    async function clearItems() {
+      const db = await getDB();
+      return db.clear("items");
+    };
+
+
+
+    const App = {
+      setup() {
+        const newItem = ref("");
+        const items = ref([]);
+
+        const refreshItems = async () => {
+          items.value = await getItems();
+        };
+
+        const createItem = async () => {
+          if (newItem.value.trim()) {
+            await addItem({ name: newItem.value });
+            newItem.value = "";
+            refreshItems();
+          }
+        };
+
+        const updateItem = async (item) => {
+          const newName = prompt("Enter new name:", item.name);
+          if (newName !== null) {
+            item.name = newName;
+            await putItem(item);
+            refreshItems();
+          }
+        };
+
+        const deleteItem = async (id) => {
+          await removeItem(id);
+          refreshItems();
+        };
+        
+        const reset = async () => {
+          const L = items.value.length;
+          if(!L || prompt(`Clear all names? (${L})`, "yes") !== "yes") return;
+          await clearItems();
+          refreshItems();
+        }
+
+        onMounted(refreshItems);
+
+        return {
+          newItem,
+          items,
+          createItem,
+          updateItem,
+          deleteItem,
+          reset
+        };
+      }
+    };
+
+    createApp(App).mount("#app");
+  </script>
+</body>
+
+</html>
